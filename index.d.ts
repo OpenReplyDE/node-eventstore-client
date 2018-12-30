@@ -1,6 +1,8 @@
 /// <reference types="node" />
 /// <reference types="Long" />
 
+import { nodePreference } from "./src/client";
+
 // Expose classes
 export class Position {
     constructor(commitPosition: number|Long, preparePosition: number|Long);
@@ -131,6 +133,12 @@ export namespace positions {
 export namespace streamPosition {
     const start: number;
     const end: number;
+}
+
+export enum nodePreference {
+    Master = "Master",
+    Slave = "Slave",
+    Random = "Random"
 }
 
 //TODO
@@ -367,7 +375,8 @@ export interface ConnectionSettings {
     clusterDns?: string,
     maxDiscoverAttempts?: number,
     externalGossipPort?: number,
-    gossipTimeout?: number
+    gossipTimeout?: number,
+    nodePreference?: NodePreference
 }
 
 // Expose Helper functions

@@ -2,6 +2,7 @@ var http = require('http');
 var util = require('util');
 var dns = require('dns');
 var GossipSeed = require('../gossipSeed');
+var NodePreference = require('../nodePreference');
 
 function NodeEndPoints(tcpEndPoint, secureTcpEndPoint) {
   if (tcpEndPoint === null && secureTcpEndPoint === null) throw new Error('Both endpoints are null.');
@@ -17,7 +18,7 @@ function NodeEndPoints(tcpEndPoint, secureTcpEndPoint) {
   });
 }
 
-function ClusterDnsEndPointDiscoverer(log, clusterDns, maxDiscoverAttempts, managerExternalHttpPort, gossipSeeds, gossipTimeout) {
+function ClusterDnsEndPointDiscoverer(log, clusterDns, maxDiscoverAttempts, managerExternalHttpPort, gossipSeeds, gossipTimeout, nodePreference) {
   if (!clusterDns && (!gossipSeeds || gossipSeeds.length === 0)) throw new Error('Both clusterDns and gossipSeeds are null/empty.');
   this._log = log;
   this._clusterDns = clusterDns;
@@ -26,6 +27,7 @@ function ClusterDnsEndPointDiscoverer(log, clusterDns, maxDiscoverAttempts, mana
   this._gossipSeeds = gossipSeeds;
   this._gossipTimeout = gossipTimeout;
   this._oldGossip = null;
+  this._nodePreference = nodePreference;
 }
 
 ClusterDnsEndPointDiscoverer.prototype.discover = function(failedTcpEndPoint) {
@@ -76,7 +78,7 @@ ClusterDnsEndPointDiscoverer.prototype._discoverEndPoint = function (failedTcpEn
           return self._tryGetGossipFrom(gossipCandidates[j++])
             .then(function (gossip) {
               if (!gossip || !gossip.members || gossip.members.length === 0) return;
-              var bestNode = self._tryDetermineBestNode(gossip.members);
+              var bestNode = self._tryDetermineBestNode(gossip.members, self._nodePreference);
               if (bestNode) {
                 self._oldGossip = gossip.members;
                 return bestNode;
@@ -206,19 +208,36 @@ const VNodeStates = Object.freeze({
   'Shutdown': 10
 });
 
-ClusterDnsEndPointDiscoverer.prototype._tryDetermineBestNode = function (members) {
+ClusterDnsEndPointDiscoverer.prototype._tryDetermineBestNode = function (members, nodePreference) {
   var notAllowedStates = [
     'Manager',
     'ShuttingDown',
     'Shutdown'
   ];
-  var node = members
+  var nodes = members
     .filter(function (x) {
       return (x.isAlive && notAllowedStates.indexOf(x.state) === -1);
     })
     .sort(function (a, b) {
       return VNodeStates[b.state] - VNodeStates[a.state];
-    })[0];
+    });
+
+  switch (nodePreference) 
+  {
+    case NodePreference.Random:
+      this._randomShuffle(nodes, 0, nodes.length -1);
+      break;
+
+    case NodePreference.Slave:
+      nodes = nodes.filter(function (x) {
+        return x.state === NodePreference.Slave
+      });
+      this._randomShuffle(nodes, 0, nodes.length -1);
+      break;
+  }
+
+  var node = nodes[0];
+
   if (!node)
   {
     //_log.Info("Unable to locate suitable node. Gossip info:\n{0}.", string.Join("\n", members.Select(x => x.ToString())));

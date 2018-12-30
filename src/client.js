@@ -72,6 +72,7 @@ exports.streamPosition = streamPosition;
 exports.systemMetadata = require('./common/systemMetadata');
 exports.eventReadStatus = results.EventReadStatus;
 exports.sliceReadStatus = require('./sliceReadStatus');
+exports.nodePreference = require('./nodePreference');
 // Expose loggers
 exports.NoopLogger = require('./common/log/noopLogger');
 exports.FileLogger = require('./common/log/fileLogger');
